@@ -1,0 +1,319 @@
+---
+title: "Levantamento dados exportação e LULC BR"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+## Exportação brasileira (1997-2022)
+
+Fonte: ComexStat (http://comexstat.mdic.gov.br/pt/home)
+
+Produtos exportados em quilograma líquido ao longo dos anos
+
+```{r expoProduto, echo=FALSE, warning=FALSE, message=FALSE, results = "asis", fig.align='center'}
+## Packages
+library(directlabels)
+library(dplyr)
+library(geobr)
+library(geomtextpath)
+library(ggplot2)
+library(ggthemes)
+library(networkD3)
+library(RColorBrewer)
+library(readr)
+library(sf)
+library(stringr)
+library(tidyr)
+library(tmap)
+library(viridis)
+library(ggrepel)
+library(ggalluvial)
+library(cowplot)
+
+######################################################################
+
+
+## Read the data 
+
+export = readr::read_csv("data/comexStat/exportBR_97_22_v2.csv")  |> 
+  #filter(coAno >= 1997 & coAno <= 2021) |> 
+  rename(name_muni = municipality) |> 
+  filter(!grepl('Mor', state_acronym)) |> 
+  filter(!grepl('EX', state_acronym)) |> 
+  filter(!grepl('ND', state_acronym))|> 
+  filter(!grepl('Mor', state_acronym))|> 
+  filter(!grepl('Mirim', state_acronym))|> 
+  filter(!grepl('Ijuís', state_acronym))|> 
+  filter(!grepl('Açu', state_acronym))
+
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de ferro e seus concentrados, incluídas as pirites de ferro ustuladas \\(cinzas de pirites\\)", "Ferro")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Ferro fundido bruto e ferro spiegel \\(especular\\), em lingotes, linguados ou outras formas primárias", "Ferro bruto e spiegel")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Soja, mesmo triturada", "Soja")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Soja, mesmo triturada", "Soja")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de alumínio e seus concentrados", "Aluminio")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de cobre e seus concentrados", "Cobre")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de cromo e seus concentrados", "Cobre")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de tungstênio e seus concentrados", "Tungstênio")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de titânio e seus concentrados", "Titânio")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de niquel e seus concentrados", "Niquel")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de molibdénio e seus concentrados", "molibdénio")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de metais preciosos e seus concentrados", "Metais preciosos")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de manganês e seus concentrados", "Manganês")
+
+export$noSh4pt = str_replace(export$noSh4pt, "Minérios de nióbio, tântalo, vanádio ou de zircónio, e seus concentrados
+", "Outros Minérios")
+
+## export$coAno = as.character(export$coAno)
+
+## Group the data by year and product
+export_grouped = export |> 
+  group_by(Year = coAno, noSh4pt) |> 
+  summarize(Exportation_KGL = sum(kgLiquido))
+
+
+## Select the top 5 most exported products
+#exporttop5 = export_grouped |> 
+# top_n(5, Exportation_KGL)
+
+## Plot the data
+
+# Line with names 
+
+
+ex = ggplot(export_grouped) +
+  geom_textline(aes(
+    x = Year, y = Exportation_KGL, group = noSh4pt, colour = noSh4pt, label = noSh4pt
+  ),
+  hjust = 1
+  ) +
+  theme(legend.position = "none")
+
+ex + scale_x_continuous(breaks = seq(1997, 2022, by = 5)) +
+  theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+
+
+```
+
+Exportação em quilograma líquido por estados e biomas em relação aos bloco econômicos de destino
+
+::: {style="display: flex;"}
+<div>
+
+```{r net1, echo=FALSE, message=FALSE, warning=FALSE}
+## Network
+
+net_estado = export |> 
+
+  group_by(state_acronym, noBlocopt) |> 
+
+  summarize(total_value = sum(kgLiquido)) |> 
+
+  ungroup() |> 
+
+  na.omit()
+
+# Create the nodes and links data frames for the Sankey diagram
+
+nodes_estado = data.frame(name = unique(c(as.character(net_estado$state_acronym), as.character(net_estado$noBlocopt))))
+
+links_estado = data.frame(
+
+  source = match(net_estado$state_acronym, nodes_estado$name) - 1,
+
+  target = match(net_estado$noBlocopt, nodes_estado$name) - 1,
+
+  value = net_estado$total_value
+
+)
+
+# Create the Sankey diagram
+
+sankeyNetwork(
+
+  Links = links_estado,
+
+  Nodes = nodes_estado,
+
+  Source = "source",
+
+  Target = "target",
+
+  Value = "value",
+
+  NodeID = "name",
+
+  fontSize = 14,
+
+  nodeWidth = 30,
+
+  sinksRight = FALSE
+
+)
+```
+
+</div>
+
+<div>
+
+```{r expoBioma, echo=FALSE, warning=FALSE, message=FALSE}
+# Aggregate the data by state and economic bloc
+
+biomemuni = sf::read_sf("/home/tai-rocha/Documents/Radom_Data/Shapefile/Muni_Biomes/Bioma_Muni.shp") |> 
+
+  dplyr::rename(name_muni = nome)
+
+JoiNN = dplyr::left_join(export, biomemuni, by = "name_muni")
+
+#JoiNN$kgLiquido
+
+# Aggregate the data by state and economic bloc
+
+net_bioma = JoiNN |> 
+
+  group_by(Biome, noBlocopt) |> 
+
+  summarize(total_value = sum(kgLiquido)) |> 
+
+  ungroup()  |> 
+
+  na.omit()
+
+# Create the nodes and links data frames for the Sankey diagram
+
+nodes_bioma = data.frame(name = unique(c(as.character(net_bioma$Biome), as.character(net_bioma$noBlocopt))))
+
+links_bioma = data.frame(
+
+  source = match(net_bioma$Biome, nodes_bioma$name) - 1,
+
+  target = match(net_bioma$noBlocopt, nodes_bioma$name) - 1,
+
+  value = net_bioma$total_value
+
+)
+
+# Create the Sankey diagram
+
+sankeyNetwork(
+
+  Links = links_bioma,
+
+  Nodes = nodes_bioma,
+
+  Source = "source",
+
+  Target = "target",
+
+  Value = "value",
+
+  NodeID = "name",
+
+  fontSize = 14,
+
+  nodeWidth = 30,
+
+  sinksRight = FALSE
+
+)
+```
+
+</div>
+:::
+
+## 
+
+## Uso e cobertura da terra (1997-2021).
+
+Fonte: MapBiomas coleção 7.1 (https://mapbiomas.org/estatisticas)
+
+Antropização\* por Biomas em hectare (1997-2021)
+
+```{r antro1, out.width="500px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Anthropic_MapBiomas.png")
+
+```
+
+Antropização\* = Agricultura, Pasto, Infra. Urbana, Mineração, Sivicultura, Aquicultura, Mosaico de Usos (agropecuária, quando não é possível definir se é pasto ou agricultura)
+
+Formação Natural Não Florestal\* em hectare por Biomas (1997-2021)
+
+```{r nonf1, out.width="500px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/NonForest.png")
+```
+
+Transições de Formação Natural Não Florestal\* para classes antrópicas nos biomas em hectare (1997-2021)
+
+```{r nonf2, out.width="900px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/NonF_transitions.png")
+```
+
+Transições de Formação Natural Não Florestal\* para classes antrópicas nos municipíos em hectare (1997-2021)
+
+ATENÇÃO: observar que é uma perspectiva que atribui a cor a partir da quantidade de hectares de transição nos municípios, o que não significa que obrigatoriamente todo o município passou por transição de Não Florestas para outras classes. No entando, a cor é atribuída para todo município e não somente em regiões onde de fato houve a transição.
+
+```{r nonf3, out.width="900px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/NonF_transintion_Maps.png")
+```
+
+Formação Natural Não Florestal\* = Campo Alagado e Área Pantanosa \| Formação Campestre \| Apicum \| Afloramento Rochoso \| Restinga Herbácea
+
+Mineração por biomas e municípios em hectare
+
+ATENÇÃO: observar que é uma perspectiva que atribui a cor a partir da quantidade de hectares DA CLASSE nos municípios, o que não significa que obrigatoriamente todo o município está ocupado pela CLASSE em questão. No entando, a cor é atribuída para todo município e não somente em regiões ocupada por esta classe.
+
+```{r miningall, echo =FALSE, out.width="900px"}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Mining.png")
+```
+
+Mineração de ferro por biomas e municípios em hectare
+
+```{r iron1, echo =FALSE, out.width="900px"}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Mining_Iron.png")
+```
+
+::: {style="display: flex;"}
+<div>
+
+```{r iron2, echo =FALSE, out.width="1000px"}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Mining_Bioma.png")
+```
+
+</div>
+
+<div>
+
+```{r iron3, echo =FALSE, out.width="900px"}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Minin_lines.png")
+```
+
+</div>
+:::
+
+Agricultura nos municipíos em hectare (1997-2021)
+
+```{r agric, echo =FALSE, out.width="900px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Agriculture_Muni.png")
+```
+
+Pasto nos municipíos em hectare (1997-2021)
+
+```{r pasto, echo =FALSE, out.width="900px", fig.align='center'}
+knitr::include_graphics("results/BR/antropic_MAPBIOMAS/Pasture_Muni.png")
+```
