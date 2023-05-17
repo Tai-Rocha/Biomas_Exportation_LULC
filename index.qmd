@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 ## Exportação brasileira (1997-2022)
 
-Fonte: ComexStat (http://comexstat.mdic.gov.br/pt/home)
+Fonte: [ComexStats](http://comexstat.mdic.gov.br/pt/home)
 
 Produtos exportados em quilograma líquido ao longo dos anos
 
@@ -241,7 +241,7 @@ sankeyNetwork(
 
 ## Uso e cobertura da terra (1997-2021).
 
-Fonte: MapBiomas coleção 7.1 (https://mapbiomas.org/estatisticas)
+Fonte: [MapBiomas coleção 7.1](https://mapbiomas.org/estatisticas)
 
 Antropização\* por Biomas em hectare (1997-2021)
 
