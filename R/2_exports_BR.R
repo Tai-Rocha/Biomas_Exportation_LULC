@@ -30,8 +30,8 @@ library(ggalluvial)
 
 ## Read the data 
 
-export = readr::read_csv("data/comexStat/exportBR_97_22_v2.csv")  |> 
-  filter(coAno >= 1997 & coAno <= 2021) |> 
+export = readr::read_csv("data/comexStat/exportBR_97_23.csv")  |> 
+  filter(coAno >= 1997 & coAno <= 2023) |> 
   rename(name_muni = municipality) |> 
   filter(!grepl('Mor', state_acronym)) |> 
   filter(!grepl('EX', state_acronym)) |> 
@@ -96,7 +96,7 @@ ex = ggplot(export_grouped) +
   ) +
   theme(legend.position = "none")
 
-ex + scale_x_continuous(breaks = seq(1997, 2021, by = 4)) +
+ex + scale_x_continuous(breaks = seq(1997, 2023, by = 2)) +
   theme(panel.border = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
 
 #ggplot() + 
